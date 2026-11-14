@@ -104,6 +104,16 @@ async for msg in query(
 npx @modelcontextprotocol/inspector uv --directory . run garmin-mcp
 ```
 
+## Run it remotely on Cloudflare
+
+To use the server from anywhere (other machines, hosted agents) without running it locally,
+deploy it to Cloudflare Containers behind a Worker with bearer-token auth. See
+[cloudflare/README.md](cloudflare/README.md).
+
+The same image can run on any container host: `garmin-mcp-http` serves MCP over Streamable
+HTTP on port 8080 and reads Garmin tokens from `GARMIN_TOKENS_JSON`. It has no
+authentication of its own, so always put it behind something that does.
+
 ## Example prompts
 
 - "How did I sleep last night compared with my average this month?"

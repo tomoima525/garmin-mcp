@@ -7,11 +7,13 @@ requires-python = ">=3.12"
 dependencies = [
     "garminconnect>=0.3.20,<0.4",
     "mcp>=2.3,<3",
+    "uvicorn>=0.30",
 ]
 
 [project.scripts]
 garmin-mcp = "garmin_mcp.server:main"
 garmin-mcp-login = "garmin_mcp.login:main"
+garmin-mcp-http = "garmin_mcp.remote:main"
 
 [dependency-groups]
 dev = [

@@ -61,7 +61,8 @@ def _garmin_errors[F: Callable[..., Any]](fn: F) -> F:
             set_client(None)
             raise ToolError(
                 f"Garmin authentication failed ({e}). Tokens may have expired: run "
-                "`garmin-mcp-login` again."
+                "`garmin-mcp-login` again (for the Cloudflare deployment, then update the "
+                "GARMIN_TOKENS secret)."
             ) from e
         except GarminConnectTooManyRequestsError as e:
             raise ToolError(f"Garmin is rate-limiting requests; wait a few minutes. ({e})") from e

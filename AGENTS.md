@@ -33,6 +33,15 @@ Requirements: Python 3.12+, [`uv`](https://docs.astral.sh/uv/).
      `ClaudeAgentOptions(mcp_servers={"garmin": {...}}, allowed_tools=["mcp__garmin__*"])`.
 4. Verify: call `get_daily_summary` with no arguments. A login error means step 2 wasn't done.
 
+### Remote option (Cloudflare)
+If the user has deployed the server to Cloudflare (`cloudflare/README.md`), connect over
+Streamable HTTP instead of running it locally:
+- URL: `https://garmin-mcp.<subdomain>.workers.dev/mcp`
+- Header: `Authorization: Bearer <MCP_AUTH_TOKEN>` (ask the user for it; never print or log it)
+- The first call after ~15 idle minutes can take several seconds (container cold start).
+- If tools return "authentication failed", the human must re-run `garmin-mcp-login` locally and
+  update the `GARMIN_TOKENS` secret, as described in `cloudflare/README.md`.
+
 ## Conventions
 - Dates: `YYYY-MM-DD`, user's local time; omitted dates default to today.
 - Sleep for date D = the night that **ended** on the morning of D ("last night" = today's date).
@@ -79,5 +88,6 @@ Requirements: Python 3.12+, [`uv`](https://docs.astral.sh/uv/).
 
 ## Working on this repo
 - `uv run pytest` (fake Garmin client, no network) and `uv run ruff check .` before committing.
+- Cloudflare Worker (`cloudflare/`): `npm run typecheck` and `npm test`.
 - New tools go in `src/garmin_mcp/server.py`: decorate with `@mcp.tool(annotations=READ_ONLY)`
   and `@_garmin_errors`, and keep them read-only.
