@@ -38,3 +38,14 @@ describe("chooseTokens", () => {
     expect(chooseTokens(undefined, {})).toEqual({ tokens: undefined, reseed: false });
   });
 });
+
+describe("keyMatches", () => {
+  it("compares access keys", async () => {
+    const { keyMatches } = await import("./logic");
+    expect(await keyMatches("k", "k")).toBe(true);
+    expect(await keyMatches(" k ", "k")).toBe(true);
+    expect(await keyMatches("x", "k")).toBe(false);
+    expect(await keyMatches(undefined, "k")).toBe(false);
+    expect(await keyMatches("k", undefined)).toBe(false);
+  });
+});

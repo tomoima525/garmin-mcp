@@ -37,7 +37,10 @@ Requirements: Python 3.12+, [`uv`](https://docs.astral.sh/uv/).
 If the user has deployed the server to Cloudflare (`cloudflare/README.md`), connect over
 Streamable HTTP instead of running it locally:
 - URL: `https://garmin-mcp.<subdomain>.workers.dev/mcp`
-- Header: `Authorization: Bearer <MCP_AUTH_TOKEN>` (ask the user for it; never print or log it)
+- Auth, either:
+  - OAuth 2.1 (claude.ai custom connectors and other OAuth clients): the client discovers and
+    registers by itself; the human approves it on the sign-in page with their access key.
+  - Header `Authorization: Bearer <MCP_AUTH_TOKEN>` (ask the user for it; never print or log it).
 - The first call after ~15 idle minutes can take several seconds (container cold start).
 - If tools return "authentication failed", the human must re-run `garmin-mcp-login` locally and
   update the `GARMIN_TOKENS` secret, as described in `cloudflare/README.md`.

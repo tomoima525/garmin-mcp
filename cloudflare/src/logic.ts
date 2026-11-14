@@ -5,9 +5,17 @@ export const TOKEN_HEADER = "x-garmin-tokens";
 /** Constant-time check of an `Authorization: Bearer <token>` header. */
 export async function isAuthorized(header: string | null, expected: string): Promise<boolean> {
   const match = header?.match(/^Bearer\s+(.+)$/i);
-  if (!match || !expected) return false;
+  return match ? keyMatches(match[1], expected) : false;
+}
+
+/** Constant-time comparison of a presented access key with the configured one. */
+export async function keyMatches(
+  candidate: string | null | undefined,
+  expected: string | undefined,
+): Promise<boolean> {
+  if (!candidate || !expected) return false;
   // Compare SHA-256 digests so the comparison length never depends on the input.
-  const [a, b] = await Promise.all([digest(match[1].trim()), digest(expected)]);
+  const [a, b] = await Promise.all([digest(candidate.trim()), digest(expected)]);
   let diff = 0;
   for (let i = 0; i < a.length; i++) diff |= a[i] ^ b[i];
   return diff === 0;

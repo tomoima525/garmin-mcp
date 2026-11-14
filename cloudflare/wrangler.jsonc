@@ -3,6 +3,8 @@
   "name": "garmin-mcp",
   "main": "src/index.ts",
   "compatibility_date": "2026-10-01",
+  // Required for OAuth Client ID Metadata Documents (SSRF protection on outbound fetches).
+  "compatibility_flags": ["global_fetch_strictly_public"],
   "observability": { "enabled": true },
 
   // The Python MCP server runs as a container built from the repo-root Dockerfile.
@@ -21,9 +23,14 @@
   "durable_objects": {
     "bindings": [{ "name": "GARMIN_MCP", "class_name": "GarminMcpContainer" }]
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["GarminMcpContainer"] }]
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["GarminMcpContainer"] }],
+
+  // OAuth clients, grants and (hashed) tokens. With no "id", `wrangler deploy` creates the
+  // namespace for you on first deploy.
+  "kv_namespaces": [{ "binding": "OAUTH_KV" }]
 
   // Secrets (set with `npx wrangler secret put <NAME>`, never commit them):
-  //   MCP_AUTH_TOKEN  - bearer token MCP clients must send
+  //   MCP_AUTH_TOKEN  - owner access key: approves OAuth clients (claude.ai) on the sign-in
+  //                     page, and works directly as a bearer token (Claude Code, SDK)
   //   GARMIN_TOKENS   - contents of ~/.garminconnect/garmin_tokens.json after `garmin-mcp-login`
 }
