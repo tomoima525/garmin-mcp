@@ -1,0 +1,3 @@
+"""MCP server for Garmin Connect data."""
+
+__version__ = "0.1.0"
