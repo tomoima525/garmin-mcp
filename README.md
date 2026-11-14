@@ -9,6 +9,8 @@ library, which talks to the same private API as the Garmin Connect app. It is
 meant for **personal use with your own account**. Garmin can change that API at
 any time, so things may occasionally break until the library is updated.
 
+> Handing this to an AI agent? Point it at [AGENTS.md](AGENTS.md) for setup and usage instructions.
+
 ## Tools
 
 All tools are read-only. Dates are `YYYY-MM-DD` (local time) and default to today.
