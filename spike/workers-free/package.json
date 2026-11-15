@@ -1,0 +1,13 @@
+{
+  "name": "garmin-workers-free-spike",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "typecheck": "wrangler types && tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3",
+    "wrangler": "4.162.0"
+  }
+}

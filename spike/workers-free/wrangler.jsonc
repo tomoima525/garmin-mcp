@@ -1,0 +1,11 @@
+{
+  // Throwaway test: can a Worker on the FREE plan call Garmin's API directly?
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "garmin-spike",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "observability": { "enabled": true },
+  // Holds Garmin tokens after a refresh (Garmin may rotate the refresh token).
+  "kv_namespaces": [{ "binding": "SPIKE_KV" }]
+  // Secrets: GARMIN_TOKENS (~/.garminconnect/garmin_tokens.json), SPIKE_KEY (any random string)
+}
