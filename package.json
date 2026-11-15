@@ -1,5 +1,5 @@
 {
-  "name": "garmin-mcp-cloudflare",
+  "name": "garmin-mcp",
   "private": true,
   "type": "module",
   "scripts": {
@@ -7,13 +7,16 @@
     "dev": "wrangler dev",
     "types": "wrangler types",
     "typecheck": "wrangler types && tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:e2e": "wrangler deploy --dry-run --outdir .e2e && node test/e2e.mjs .e2e/index.js"
   },
   "dependencies": {
-    "@cloudflare/containers": "0.3.7",
-    "@cloudflare/workers-oauth-provider": "1.2.4"
+    "@cloudflare/workers-oauth-provider": "1.2.4",
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "zod": "4.6.7"
   },
   "devDependencies": {
+    "miniflare-stable": "npm:miniflare@4.20260730.0",
     "typescript": "5.9.3",
     "vitest": "3.2.4",
     "wrangler": "4.162.0"
