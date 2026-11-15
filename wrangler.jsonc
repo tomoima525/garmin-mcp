@@ -7,27 +7,24 @@
   "compatibility_flags": ["global_fetch_strictly_public"],
   "observability": { "enabled": true },
 
-  // The Python MCP server runs as a container built from the repo-root Dockerfile.
-  "containers": [
-    {
-      "class_name": "GarminMcpContainer",
-      "image": "../Dockerfile",
-      "image_build_context": "..",
-      // One Garmin account => one instance. Tokens live in this instance's storage.
-      "max_instances": 1,
-      // 1/4 vCPU, 1 GiB. The server idles at ~60 MiB, so "lite" (1/16 vCPU, 256 MiB)
-      // also fits and costs less, at the price of slower cold starts.
-      "instance_type": "basic"
-    }
-  ],
+  // Everything here is available on the Workers Free plan.
+
+  // One instance holds the Garmin tokens and serializes refreshes (SQLite-backed, as the
+  // Free plan requires).
   "durable_objects": {
-    "bindings": [{ "name": "GARMIN_MCP", "class_name": "GarminMcpContainer" }]
+    "bindings": [{ "name": "GARMIN_SESSION", "class_name": "GarminSession" }]
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["GarminMcpContainer"] }],
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["GarminSession"] }],
 
   // OAuth clients, grants and (hashed) tokens. With no "id", `wrangler deploy` creates the
   // namespace for you on first deploy.
-  "kv_namespaces": [{ "binding": "OAUTH_KV" }]
+  "kv_namespaces": [{ "binding": "OAUTH_KV" }],
+
+  // Refresh the Garmin login weekly (Mondays 04:17 UTC) so it never expires unused.
+  "triggers": { "crons": ["17 4 * * 1"] }
+
+  // Optional: "vars": { "TIMEZONE": "America/Los_Angeles" } to override the time zone in
+  // your Garmin profile (used to work out "today").
 
   // Secrets (set with `npx wrangler secret put <NAME>`, never commit them):
   //   MCP_AUTH_TOKEN  - owner access key: approves OAuth clients (claude.ai) on the sign-in

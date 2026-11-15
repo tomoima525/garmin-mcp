@@ -1,6 +1,6 @@
 import type { ConsentDescription } from "@cloudflare/workers-oauth-provider";
 import { describe, expect, it } from "vitest";
-import { consentPage, escapeHtml } from "./consent";
+import { consentPage, escapeHtml } from "../src/consent";
 
 const details = (over: Partial<ConsentDescription> = {}): ConsentDescription =>
   ({

@@ -1,33 +1,38 @@
-// Cloudflare Worker that fronts the garmin-mcp Python server running in a Container.
+// garmin-mcp: a remote MCP server for your Garmin Connect data, on Cloudflare Workers.
 //
 //   claude.ai ----(OAuth 2.1 access token)----\
-//                                              >--> Worker /mcp --> Container :8080 /mcp
-//   Claude Code / SDK --(Bearer MCP_AUTH_TOKEN)/
+//                                              >--> /mcp --> MCP tools --> Garmin Connect API
+//   Claude Code / SDK --(Bearer MCP_AUTH_TOKEN)/                 |
+//                                                     GarminSession (Durable Object):
+//                                                     Garmin tokens, refreshed and rotated
 //
 // Auth: the Worker is an OAuth 2.1 authorization server (via workers-oauth-provider) so
 // OAuth-only clients like claude.ai custom connectors can connect. The owner approves each
-// client on /authorize by entering MCP_AUTH_TOKEN. That same key still works directly as a
+// client on /authorize by entering MCP_AUTH_TOKEN. That same key also works directly as a
 // bearer token for clients that can send headers.
-//
-// Garmin tokens: the Worker starts the container with them and saves refreshed tokens the
-// container reports back in the `x-garmin-tokens` response header (stripped before the
-// response leaves).
 
-import { Container, getContainer } from "@cloudflare/containers";
 import {
   AuthorizationError,
   CimdFetchError,
   OAuthProvider,
   type OAuthHelpers,
 } from "@cloudflare/workers-oauth-provider";
+import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { consentPage, messagePage } from "./consent";
-import { TOKEN_HEADER, chooseTokens, isTokenJson, keyMatches } from "./logic";
+import { GarminClient, type TokenSource } from "./garmin";
+import { keyMatches } from "./logic";
+import type { GarminSession } from "./session";
+import { buildServer } from "./tools";
+
+export { GarminSession } from "./session";
 
 type AppEnv = Env & {
   /** Owner's access key: approves OAuth clients, and works directly as a bearer token. */
   MCP_AUTH_TOKEN?: string;
   /** Contents of ~/.garminconnect/garmin_tokens.json from `garmin-mcp-login`. */
   GARMIN_TOKENS?: string;
+  /** Optional IANA time zone overriding the one in your Garmin profile. */
+  TIMEZONE?: string;
   /** Injected by OAuthProvider into the default handler. */
   OAUTH_PROVIDER: OAuthHelpers;
 };
@@ -36,47 +41,9 @@ type AppEnv = Env & {
 const SCOPE = "garmin:read";
 const OWNER = "owner";
 
-const SEED_KEY = "garmin_tokens_seed";
-const REFRESHED_KEY = "garmin_tokens";
-
-export class GarminMcpContainer extends Container<AppEnv> {
-  defaultPort = 8080;
-  // Stop the container after 15 minutes without requests; it restarts on the next call.
-  sleepAfter = "15m";
-
-  override async fetch(request: Request): Promise<Response> {
-    const storage = this.ctx.storage;
-    const [seed, refreshed] = await Promise.all([
-      storage.get<string>(SEED_KEY),
-      storage.get<string>(REFRESHED_KEY),
-    ]);
-    const { tokens, reseed } = chooseTokens(this.env.GARMIN_TOKENS, { seed, refreshed });
-    if (!tokens) {
-      return Response.json(
-        { error: "GARMIN_TOKENS secret is not set. See cloudflare/README.md." },
-        { status: 503 },
-      );
-    }
-    if (reseed) {
-      await storage.put(SEED_KEY, tokens);
-      await storage.delete(REFRESHED_KEY);
-      // Tokens changed under a running container: restart it so it picks them up.
-      if ((await this.getState()).status !== "stopped") await this.destroy();
-    }
-
-    // Only read when the container (re)starts.
-    this.envVars = { GARMIN_TOKENS_JSON: tokens };
-    const upstream = await super.fetch(request);
-
-    const reported = upstream.headers.get(TOKEN_HEADER);
-    if (!reported) return upstream;
-    if (reported !== tokens && isTokenJson(reported)) {
-      await storage.put(REFRESHED_KEY, reported);
-    }
-    const response = new Response(upstream.body, upstream);
-    response.headers.delete(TOKEN_HEADER);
-    return response;
-  }
+/** The single GarminSession instance (one Garmin account per deployment). */
+function session(env: AppEnv): DurableObjectStub<GarminSession> {
+  return env.GARMIN_SESSION.get(env.GARMIN_SESSION.idFromName(OWNER));
 }
 
 // --------------------------------------------------------------------------- MCP endpoint
@@ -84,9 +51,23 @@ export class GarminMcpContainer extends Container<AppEnv> {
 const mcpHandler = {
   // Only reached with a valid OAuth access token or the owner's access key.
   async fetch(request: Request, env: AppEnv): Promise<Response> {
-    const forwarded = new Request(request);
-    forwarded.headers.delete("authorization"); // the container doesn't need it
-    return getContainer(env.GARMIN_MCP).fetch(forwarded);
+    const stub = session(env);
+    const tokens: TokenSource = {
+      accessToken: () => stub.accessToken(),
+      refreshAfter: (stale) => stub.refreshAfter(stale),
+    };
+    const server = buildServer({
+      garmin: new GarminClient(tokens),
+      profile: () => stub.profile(),
+      timeZoneOverride: env.TIMEZONE,
+    });
+    // Stateless: a fresh server and transport per request, plain JSON responses.
+    const transport = new WebStandardStreamableHTTPServerTransport({
+      sessionIdGenerator: undefined,
+      enableJsonResponse: true,
+    });
+    await server.connect(transport);
+    return transport.handleRequest(request);
   },
 } satisfies ExportedHandler<AppEnv>;
 
@@ -212,5 +193,9 @@ function providerFor(origin: string): OAuthProvider<AppEnv> {
 export default {
   fetch(request, env, ctx) {
     return providerFor(new URL(request.url).origin).fetch(request, env, ctx);
+  },
+  // Weekly: refresh the Garmin login so it never lapses (Garmin's refresh token lasts 30 days).
+  async scheduled(_controller, env) {
+    await session(env).keepAlive();
   },
 } satisfies ExportedHandler<AppEnv>;
