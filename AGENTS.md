@@ -50,6 +50,7 @@ Garmin password or tokens into chat.
 | `get_training_status` | date? | Training status, acute/chronic load, VO2 max |
 | `get_race_predictions` | — | Predicted 5K/10K/half/marathon times |
 | `get_body_composition` | start_date?, end_date? | Weight, BMI, body fat %, muscle mass |
+| `get_connection_status` | — | Health of the Garmin login: last renewal, expiry, `ok` / `warning` / `action_needed` and what to do. Doesn't call Garmin |
 | `garmin_get` | path, params?, include_timeseries? | Escape hatch: GET a read-only Garmin API path under an allowed service; its description lists useful paths |
 
 ## Recommended patterns
@@ -61,9 +62,12 @@ Garmin password or tokens into chat.
 - Prefer summary tools first; fetch details/timeseries only when needed.
 
 ## Errors
-- "the login has expired" / "Garmin rejected the login" / "GARMIN_TOKENS secret is not set" → the
-  human must re-run the Garmin login and upload the tokens (README, set-up steps 3 and 4). Do not
-  loop retries.
+- Any login error ("the login has expired" / "Garmin rejected the login" / "GARMIN_TOKENS secret
+  is not set") → call `get_connection_status` and relay its `message`. If it says
+  `action_needed`, the human must re-run the Garmin login and upload the tokens (README, set-up
+  steps 3 and 4). Do not loop retries.
+- If `get_connection_status` says `warning`, mention it to the user once; no action is needed
+  unless it persists for days.
 - "rate-limiting" → wait a few minutes; don't hammer the API.
 - Empty or missing fields usually mean the watch wasn't worn or the device doesn't support that
   metric. Say so rather than guessing.

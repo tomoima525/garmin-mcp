@@ -15,6 +15,8 @@ const ACTIVITY_PAGE = 100;
 export interface ToolContext {
   garmin: Pick<GarminClient, "get">;
   profile(): Promise<Profile>;
+  /** Health of the Garmin login (from stored renewal history; no Garmin call). */
+  connectionStatus(): Promise<unknown>;
   /** IANA zone that overrides the Garmin profile's (the TIMEZONE setting). */
   timeZoneOverride?: string;
 }
@@ -25,7 +27,8 @@ const INSTRUCTIONS =
   "Dates are YYYY-MM-DD in the user's local time zone and default to today. " +
   "Sleep for date D is the night that ended on the morning of D. " +
   "Units: distance in meters, duration in seconds, speed in m/s unless a field says " +
-  "otherwise. Long minute-by-minute series are omitted unless include_timeseries=true.";
+  "otherwise. Long minute-by-minute series are omitted unless include_timeseries=true. " +
+  "If a tool reports a login problem, call get_connection_status and relay its message.";
 
 const READ_ONLY = { readOnlyHint: true, openWorldHint: true } as const;
 
@@ -358,6 +361,16 @@ export function buildServer(ctx: ToolContext): McpServer {
       const [s, e] = parseRange(a.start_date, a.end_date, await today(), MAX_RANGE_DAYS);
       return shrink(await get("/weight-service/weight/dateRange", { startDate: s, endDate: e }));
     },
+  );
+
+  tool(
+    "get_connection_status",
+    "Health of the Garmin login: when it was last renewed, when it expires, and whether the " +
+      "user needs to log in again on their computer. Doesn't call Garmin, so it works even when " +
+      "the login has failed. Use it when another tool reports a login problem, or when the user " +
+      "asks whether the connection is OK.",
+    {},
+    async () => ctx.connectionStatus(),
   );
 
   tool(

@@ -26,7 +26,7 @@ async function outbound(req) {
     await new Promise((r) => setTimeout(r, 50));                    // widen any race window
     if (body.get("refresh_token") !== current.refresh) return new Response('{"error":"invalid_grant"}', { status: 400 });
     current = issue();
-    return Response.json({ access_token: current.access, refresh_token: current.refresh, expires_in: 104400 });
+    return Response.json({ access_token: current.access, refresh_token: current.refresh, expires_in: 104400, refresh_token_expires_in: 2591999 });
   }
   if (url.host === "connectapi.garmin.com") {
     const token = req.headers.get("authorization")?.replace("Bearer ", "");
@@ -81,8 +81,17 @@ try {
   // 3. Real MCP client: initialize + list tools
   const client = await mcp();
   const { tools } = await client.listTools();
-  assert.equal(tools.length, 14);
+  assert.equal(tools.length, 15);
   step(`MCP client initializes and lists ${tools.length} tools`);
+
+  const status = async () => JSON.parse(text(await client.callTool({ name: "get_connection_status", arguments: {} })));
+  const apiCallsBefore = garmin.api.length;
+  const fresh = await status();
+  assert.equal(fresh.status, "ok");
+  assert.match(fresh.message, /No renewal recorded yet/);
+  assert.equal(fresh.login_expiry_is_estimate, true);
+  assert.equal(garmin.api.length, apiCallsBefore, "status must not call Garmin");
+  step(`status right after upload: ${fresh.status} ("${fresh.message.slice(0, 40)}..."), no Garmin call`);
 
   // 4. Five concurrent calls with a token about to expire -> exactly ONE refresh
   const results = await Promise.all(Array.from({ length: 5 }, () => client.callTool({ name: "get_sleep", arguments: { date: "2026-11-13" } })));
@@ -107,12 +116,19 @@ try {
   assert.equal(garmin.api.at(-1).path, `/hrv-service/hrv/${la}`);
   step(`default date uses the profile time zone (${la})`);
 
-  // 7. Weekly cron -> refresh with the latest (rotated) refresh token
+  // 7. Daily cron -> refresh with the latest (rotated) refresh token
   const worker = await mf.getWorker();
   const latest = current.refresh;
-  await worker.scheduled({ cron: "17 4 * * 1" });
+  await worker.scheduled({ cron: "17 4 * * *" });
   assert.equal(garmin.refreshes.at(-1), latest);
   step(`scheduled keep-alive refreshes with the rotated refresh token (${latest})`);
+
+  const renewed = await status();
+  assert.equal(renewed.status, "ok");
+  assert.equal(renewed.days_until_login_expires, 29);
+  assert.equal(renewed.login_expiry_is_estimate, false);
+  assert.ok(Date.now() - Date.parse(renewed.last_renewal_at) < 60_000);
+  step(`status after renewal: ok, login expires in ${renewed.days_until_login_expires} days (from Garmin)`);
 
   // 8. Tokens were persisted: a fresh client works without another refresh.
   const count = garmin.refreshes.length;
@@ -128,6 +144,18 @@ try {
   assert.ok(dead.isError);
   assert.match(text(dead), /garmin-mcp-login/);
   step(`expired Garmin login returns a helpful error: "${text(dead).slice(0, 70)}..."`);
+
+  const broken = await status();
+  assert.equal(broken.status, "action_needed");
+  assert.match(broken.message, /garmin-mcp-login/);
+  assert.match(broken.last_renewal_error.message, /refresh failed \(400\)/);
+  step(`status after Garmin rejects the renewal: action_needed ("${broken.message.slice(0, 50)}...")`);
+
+  // 10. Cron failure is reported (and recorded), not swallowed
+  const cron = await worker.scheduled({ cron: "17 4 * * *" });
+  assert.equal(cron.outcome, "exception", `cron outcome: ${cron.outcome}`);
+  assert.equal((await status()).status, "action_needed");
+  step("a failing scheduled renewal fails the cron run and keeps status at action_needed");
 
   console.log("\nALL E2E CHECKS PASSED");
 } finally {

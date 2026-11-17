@@ -95,11 +95,18 @@ export class GarminClient {
   }
 }
 
+export interface RefreshResult {
+  tokens: GarminTokens;
+  /** When the new refresh token (i.e. the login) expires, if Garmin said so. */
+  loginExpiresAt: number | null;
+}
+
 /** Exchange the refresh token for new tokens. Garmin rotates the refresh token each time. */
 export async function refreshTokens(
   tokens: GarminTokens,
   fetchFn: FetchFn = defaultFetch,
-): Promise<GarminTokens> {
+  now: number = Date.now(),
+): Promise<RefreshResult> {
   const res = await fetchFn(DI_TOKEN_URL, {
     method: "POST",
     headers: {
@@ -129,10 +136,14 @@ export async function refreshTokens(
   if (typeof data?.access_token !== "string") {
     throw new GarminError("upstream", "Garmin token refresh returned no access token.");
   }
+  const lifetime = data.refresh_token_expires_in;
   return {
-    di_token: data.access_token,
-    di_refresh_token: typeof data.refresh_token === "string" ? data.refresh_token : tokens.di_refresh_token,
-    di_client_id: tokens.di_client_id,
+    tokens: {
+      di_token: data.access_token,
+      di_refresh_token: typeof data.refresh_token === "string" ? data.refresh_token : tokens.di_refresh_token,
+      di_client_id: tokens.di_client_id,
+    },
+    loginExpiresAt: typeof lifetime === "number" && lifetime > 0 ? now + lifetime * 1000 : null,
   };
 }
 
