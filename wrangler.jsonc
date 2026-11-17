@@ -20,8 +20,9 @@
   // namespace for you on first deploy.
   "kv_namespaces": [{ "binding": "OAUTH_KV" }],
 
-  // Refresh the Garmin login weekly (Mondays 04:17 UTC) so it never expires unused.
-  "triggers": { "crons": ["17 4 * * 1"] }
+  // Renew the Garmin login daily at 04:17 UTC so it never expires unused. Keep in sync with
+  // RENEWAL_SCHEDULE in src/status.ts.
+  "triggers": { "crons": ["17 4 * * *"] }
 
   // Optional: "vars": { "TIMEZONE": "America/Los_Angeles" } to override the time zone in
   // your Garmin profile (used to work out "today").

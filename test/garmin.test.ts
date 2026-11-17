@@ -54,9 +54,14 @@ describe("GarminClient.get", () => {
 describe("refreshTokens", () => {
   const tokens = { di_token: "a", di_refresh_token: "r", di_client_id: "CID" };
 
-  it("posts a refresh_token grant and keeps the rotated refresh token", async () => {
-    const fetchFn = vi.fn<FetchFn>(async () => json({ access_token: "a2", refresh_token: "r2" }));
-    expect(await refreshTokens(tokens, fetchFn)).toEqual({ di_token: "a2", di_refresh_token: "r2", di_client_id: "CID" });
+  it("posts a refresh_token grant, keeps the rotated refresh token and its expiry", async () => {
+    const fetchFn = vi.fn<FetchFn>(async () =>
+      json({ access_token: "a2", refresh_token: "r2", refresh_token_expires_in: 2_591_999 }),
+    );
+    expect(await refreshTokens(tokens, fetchFn, 1_000)).toEqual({
+      tokens: { di_token: "a2", di_refresh_token: "r2", di_client_id: "CID" },
+      loginExpiresAt: 1_000 + 2_591_999_000,
+    });
     const [url, init] = fetchFn.mock.calls[0];
     expect(url).toBe("https://diauth.garmin.com/di-oauth2-service/oauth/token");
     expect((init!.headers as Record<string, string>).Authorization).toBe(`Basic ${btoa("CID:")}`);
@@ -65,7 +70,8 @@ describe("refreshTokens", () => {
 
   it("keeps the old refresh token if Garmin doesn't send a new one", async () => {
     const next = await refreshTokens(tokens, async () => json({ access_token: "a2" }));
-    expect(next.di_refresh_token).toBe("r");
+    expect(next.tokens.di_refresh_token).toBe("r");
+    expect(next.loginExpiresAt).toBeNull();
   });
 
   it("tells the user to log in again when the refresh is refused", async () => {

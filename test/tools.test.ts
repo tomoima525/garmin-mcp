@@ -34,6 +34,7 @@ async function connect(get: Get, opts: { timeZone?: string; override?: string } 
   const server = buildServer({
     garmin: { get: vi.fn(get) as any },
     profile: async () => ({ displayName: "runner 1", timeZone: opts.timeZone ?? "America/Los_Angeles" }),
+    connectionStatus: async () => ({ status: "ok", message: "healthy" }),
     timeZoneOverride: opts.override,
   });
   const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
@@ -58,7 +59,8 @@ describe("tools", () => {
     expect(tools.map((t) => t.name)).toEqual([
       "get_daily_summary", "get_sleep", "get_sleep_trend", "get_hrv", "get_training_readiness",
       "get_body_battery", "get_stress", "get_heart_rate", "list_activities", "get_activity",
-      "get_training_status", "get_race_predictions", "get_body_composition", "garmin_get",
+      "get_training_status", "get_race_predictions", "get_body_composition",
+      "get_connection_status", "garmin_get",
     ]);
     expect(tools.every((t) => t.annotations?.readOnlyHint)).toBe(true);
   });
@@ -129,6 +131,13 @@ describe("tools", () => {
     const { data } = await call(await connect(get), "get_activity", { activity_id: 123, include_hr_zones: false });
     expect(Object.keys(data)).toEqual(["activity", "splits"]);
     expect(data.splits.path).toBe("/activity-service/activity/123/splits");
+  });
+
+  it("get_connection_status relays the session's report without calling Garmin", async () => {
+    const get = vi.fn<Get>(async () => ({}));
+    const { data } = await call(await connect(get), "get_connection_status");
+    expect(data).toEqual({ status: "ok", message: "healthy" });
+    expect(get).not.toHaveBeenCalled();
   });
 
   it("surfaces Garmin errors as tool errors", async () => {

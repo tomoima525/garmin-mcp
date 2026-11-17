@@ -59,6 +59,7 @@ const mcpHandler = {
     const server = buildServer({
       garmin: new GarminClient(tokens),
       profile: () => stub.profile(),
+      connectionStatus: () => stub.status(),
       timeZoneOverride: env.TIMEZONE,
     });
     // Stateless: a fresh server and transport per request, plain JSON responses.
@@ -194,7 +195,8 @@ export default {
   fetch(request, env, ctx) {
     return providerFor(new URL(request.url).origin).fetch(request, env, ctx);
   },
-  // Weekly: refresh the Garmin login so it never lapses (Garmin's refresh token lasts 30 days).
+  // Daily: renew the Garmin login so it never lapses (each refresh token lasts ~30 days, so
+  // even weeks of failed runs leave time to notice via get_connection_status).
   async scheduled(_controller, env) {
     await session(env).keepAlive();
   },

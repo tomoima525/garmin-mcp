@@ -23,8 +23,13 @@ It talks to Garmin's private API (the one the Garmin Connect app uses), so it's 
   your password.
 - **Everything else runs in the Worker** (`src/`, TypeScript). It refreshes the Garmin tokens by
   itself and stores them in a Durable Object, which also makes sure only one refresh happens at a
-  time (Garmin replaces the refresh token on every refresh). A weekly scheduled refresh keeps the
-  login alive even if you don't use the server for a while.
+  time (Garmin replaces the refresh token on every refresh).
+- **You log in once.** Each renewal gives a new login that lasts about 30 days, and the Worker
+  renews it every day on a schedule, so it never lapses even if you don't use the server. You
+  only log in again if Garmin rejects the login (e.g. after a password change, or if Garmin turns
+  out to cap how long a login can last, which we haven't seen).
+  `get_connection_status` shows when the login was last renewed and when it expires, and warns
+  well before it lapses.
 - **OAuth sign-in for claude.ai.** The Worker is an OAuth 2.1 authorization server, so claude.ai
   can connect. You approve each app on a sign-in page with your access key. The same key also
   works directly as a bearer token.
@@ -130,6 +135,7 @@ All tools are read-only. Dates are `YYYY-MM-DD` in your local time zone and defa
 | `get_training_status` | Training status, acute/chronic load, VO2 max |
 | `get_race_predictions` | Predicted 5K / 10K / half / full marathon times |
 | `get_body_composition` | Weight, BMI, body fat %, muscle mass |
+| `get_connection_status` | Health of the Garmin login: last renewal, expiry, and whether you need to log in again |
 | `garmin_get` | Escape hatch: GET any read-only Garmin API path under an allowed service |
 
 Minute-by-minute series (heart rate, stress, sleep movement, ...) are replaced with a short
@@ -140,9 +146,15 @@ it, add `"vars": { "TIMEZONE": "America/Los_Angeles" }` to `wrangler.jsonc` and 
 
 ## Operations
 
-- **Garmin login expired** (tools say "the login has expired"): run step 3 and step 4 again. The
-  Worker notices the new secret and switches to it. With the weekly refresh this should only be
-  needed if Garmin revokes the login, or the Worker was unused for 30 days with the schedule off.
+- **Check the login:** ask your agent "is my Garmin connection OK?" (it calls
+  `get_connection_status`). `ok` means nothing to do. `warning` means a renewal failed
+  temporarily or the login expires within a week. `action_needed` means you must log in again.
+- **Log in again** (status says `action_needed`, or tools say "the login has expired"): run step
+  3 and step 4 again. The Worker notices the new secret and switches to it. With daily renewals
+  this should only be needed if Garmin rejects the login, e.g. after a password change, or if
+  renewals fail for about 30 days in a row.
+- **Renewal runs:** daily at 04:17 UTC (`triggers` in `wrangler.jsonc`). A failed run shows as a
+  failed Cron event under Workers & Pages → garmin-mcp → Logs.
 - **Rotate the access key:** `openssl rand -hex 32 | npx wrangler secret put MCP_AUTH_TOKEN`,
   then update bearer-token clients. Apps already approved through OAuth stay connected.
 - **Disconnect all OAuth apps** (e.g. a lost device): in the dashboard, Storage & Databases → KV →
